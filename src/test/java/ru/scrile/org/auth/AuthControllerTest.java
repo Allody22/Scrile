@@ -1,17 +1,20 @@
 package ru.scrile.org.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import ru.scrile.org.config.exception.GlobalExceptionHandler;
+import ru.scrile.org.config.security.MyAuthenticationEntryPoint;
+import ru.scrile.org.config.security.WebSecurityConfig;
 import ru.scrile.org.controller.AuthController;
 import ru.scrile.org.payload.request.AuthRequest;
 import ru.scrile.org.payload.request.RegistrationRequest;
+import ru.scrile.org.service.MyUserDetailsService;
 import ru.scrile.org.service.UserService;
 
 import static org.mockito.Mockito.doNothing;
@@ -20,7 +23,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(AuthController.class)
+@WebMvcTest(controllers = AuthController.class)
+@Import({WebSecurityConfig.class, GlobalExceptionHandler.class})
 public class AuthControllerTest {
 
     @Autowired
@@ -29,13 +33,15 @@ public class AuthControllerTest {
     @MockBean
     private UserService userService;
 
+    @MockBean
+    private MyAuthenticationEntryPoint myAuthenticationEntryPoint;
+
+    @MockBean
+    private MyUserDetailsService userDetailsService;
+
     @Autowired
     private ObjectMapper objectMapper;
 
-    @BeforeEach
-    void setup() {
-        mockMvc = MockMvcBuilders.standaloneSetup(new AuthController(userService)).build();
-    }
 
     @Test
     void authWithRegister_shouldReturn200() throws Exception {

@@ -1,4 +1,4 @@
-package ru.scrile.org.auth.registration;
+package ru.scrile.org.order.create;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -7,28 +7,33 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import ru.scrile.org.config.exception.GlobalExceptionHandler;
 import ru.scrile.org.config.security.MyAuthenticationEntryPoint;
 import ru.scrile.org.config.security.WebSecurityConfig;
-import ru.scrile.org.controller.AuthController;
-import ru.scrile.org.payload.request.RegistrationRequest;
+import ru.scrile.org.controller.OrderController;
+import ru.scrile.org.model.exception.UserNotFoundException;
+import ru.scrile.org.payload.request.NewOrderRequest;
 import ru.scrile.org.service.MyUserDetailsService;
-import ru.scrile.org.service.UserService;
+import ru.scrile.org.service.OrderService;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(controllers = AuthController.class)
+@WebMvcTest(controllers = OrderController.class)
 @Import({WebSecurityConfig.class, GlobalExceptionHandler.class})
-public class RegistrationValidationTest {
+public class CreateOrderExceptionTest {
 
     @Autowired
     private MockMvc mockMvc;
 
     @MockBean
-    private UserService userService;
+    private OrderService orderService;
 
     @MockBean
     private MyAuthenticationEntryPoint myAuthenticationEntryPoint;
@@ -41,34 +46,17 @@ public class RegistrationValidationTest {
 
 
     @Test
-    void registerUser_WithBlankUsername_shouldReturn400() throws Exception {
-        RegistrationRequest request = new RegistrationRequest("", "password", 25);
+    @WithMockUser(username = "user")
+    void createOrder_WithMissingProductName_ShouldReturnBadRequest() throws Exception {
+        NewOrderRequest request = new NewOrderRequest("", 100.0, null);
 
         String expectedJsonResponse = "{"
                 + "\"violations\":["
-                + "{\"fieldName\":\"name\",\"message\":\"Name must not be blank\"}"
+                + "{\"fieldName\":\"productName\",\"message\":\"Product name must not be blank\"}"
                 + "]"
                 + "}";
 
-        mockMvc.perform(post("/api/v1/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().json(expectedJsonResponse));
-    }
-
-
-    @Test
-    void registerUser_WithBlankPassword_shouldReturn400() throws Exception {
-        RegistrationRequest request = new RegistrationRequest("username", "", 25);
-
-        String expectedJsonResponse = "{"
-                + "\"violations\":["
-                + "{\"fieldName\":\"password\",\"message\":\"Password must not be blank\"}"
-                + "]"
-                + "}";
-
-        mockMvc.perform(post("/api/v1/register")
+        mockMvc.perform(post("/api/v1/orders/new")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
@@ -76,20 +64,28 @@ public class RegistrationValidationTest {
     }
 
     @Test
-    void registerUser_WithoutUsername_shouldReturn400() throws Exception {
-        RegistrationRequest request = new RegistrationRequest(null, "", 25);
+    @WithMockUser(username = "user")
+    void createOrder_WithMissingPrice_ShouldReturnOk() throws Exception {
+        NewOrderRequest request = new NewOrderRequest("Product", 0.0, null);
 
-        String expectedJsonResponse = "{"
-                + "\"violations\":["
-                + "{\"fieldName\":\"name\",\"message\":\"Name must not be blank\"}," +
-                "{\"fieldName\":\"password\",\"message\":\"Password must not be blank\"}"
-                + "]"
-                + "}";
-
-        mockMvc.perform(post("/api/v1/register")
+        mockMvc.perform(post("/api/v1/orders/new")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(content().json(expectedJsonResponse));
+                .andExpect(status().isOk());
     }
+
+    @Test
+    @WithMockUser(username = "nonexistentUser")
+    void createOrder_WithNonexistentUser_ShouldReturnNotFound() throws Exception {
+        NewOrderRequest request = new NewOrderRequest("Product", 100.0, null);
+
+        doThrow(new UserNotFoundException("nonexistentUser"))
+                .when(orderService).makeNewOrder(eq("nonexistentUser"), any(NewOrderRequest.class));
+
+        mockMvc.perform(post("/api/v1/orders/new")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound());
+    }
+
 }
